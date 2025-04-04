@@ -17,6 +17,20 @@ spec:
       containers:
       - image: 654654385216.dkr.ecr.us-east-1.amazonaws.com/result-image
         name: result
-        ports:
-        - containerPort: 80
-          name: result
+        env:
+            - name: POSTGRES_HOST
+              value: postgres  # Connects to the PostgreSQL service
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+          ports:
+            - containerPort: 8081
+        
+          
