@@ -30,7 +30,7 @@ spec:
                 secretKeyRef:
                   name: postgres-secret
                   key: password
-          ports:
+        ports:
             - containerPort: 8081
         
           
