@@ -4,19 +4,22 @@ def region = "us-east-1"
 pipeline {
     agent any
     environment {
-        // Environment variables will be available in all stages
+        // Environment variables available in all stages
         BRANCH_NAME = "${env.BRANCH_NAME}"
     }
     stages {
         stage("Initialize") {
             steps {
                 script {
-                    // Get microservice name and tag
-                    ms = getMsName()
-                    tag = getTag()
+                    // Properly declare variables with def
+                    def ms = getMsName()
+                    def tag = getTag()
                     
-                    // Print debugging info
-                    echo "Building ${ms}:${tag}"
+                    // Store in environment for other stages
+                    env.MS_NAME = ms
+                    env.IMAGE_TAG = tag
+                    
+                    echo "Building ${env.MS_NAME}:${env.IMAGE_TAG}"
                     echo "Branch: ${env.BRANCH_NAME}"
                     sh "ls -l"  // Debug file listing
                 }
@@ -26,7 +29,7 @@ pipeline {
         stage("Build Docker Image") {
             steps {
                 script {
-                    sh "docker build . -t ${registry}/${ms}:${tag}"
+                    sh "docker build . -t ${registry}/${env.MS_NAME}:${env.IMAGE_TAG}"
                 }
             }
         }
@@ -48,7 +51,7 @@ pipeline {
             steps {
                 script {
                     withAWS(region: region, credentials: 'aws-ecr-creds') {
-                        sh "docker push ${registry}/${ms}:${tag}"
+                        sh "docker push ${registry}/${env.MS_NAME}:${env.IMAGE_TAG}"
                     }
                 }
             }
@@ -74,7 +77,7 @@ pipeline {
                             ./kubectl apply -f k8s/deployment.yaml -n vote
                             
                             ./kubectl set image deploy/result \
-                            result=${registry}/${ms}:${tag} -n vote
+                            result=${registry}/${env.MS_NAME}:${env.IMAGE_TAG} -n vote
                             
                             ./kubectl rollout restart deploy/result -n vote
                             ./kubectl rollout status deploy/result -n vote --timeout=300s
