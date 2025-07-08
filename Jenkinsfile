@@ -1,23 +1,27 @@
-def registry= "817041139384.dkr.ecr.us-east-1.amazonaws.com"
-def tag = ""
-def ms = ""
+def registry= "654654385216.dkr.ecr.us-east-1.amazonaws.com"
 def region = "us-east-1"
 
-pipeline{
+pipeline {
     agent any
+    
+    environment {
+        TAG = ""
+        MS = "result"
+    }
     stages{
         stage("init"){
             steps{
                 script{
-                    tag = getTag()
-                    ms = getMsName()
+                    TAG = getTag()
+                    echo "Image tag set to: ${TAG}
+                
                 }
             }
         }
         stage("Build Docker image"){
             steps{
                 script{
-                    sh "docker build . -t ${registry}/${ms}:${tag}"
+                    sh "docker build . -t ${registry}/${env.MS}:${env.TAG}"
                 }
             }
         }
@@ -25,7 +29,7 @@ pipeline{
         stage("Login to Ecr"){
             steps{
                 script{
-                    withAWS(region:"$region",credentials:'aws-ecr-creds'){
+                    withAWS(region:"$region",credentials:'aws_creds'){
                         sh "aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${registry}"
                     }
                 }
@@ -35,8 +39,8 @@ pipeline{
         stage("Docker push"){
             steps{
                 script{
-                    withAWS(region:"$region",credentials:'aws-ecr-creds'){
-                        sh "docker push ${registry}/${ms}:${tag}"
+                    withAWS(region:"$region",credentials:'aws_creds'){
+                        sh "docker push ${registry}/${env.MS}:${env.TAG}"
                     }
                 }
             }
@@ -46,13 +50,13 @@ pipeline{
             when{branch 'develop'}
             steps{
                 script{
-                    withAWS(region:"$region",credentials:'aws-ecr-creds'){
+                    withAWS(region:"$region",credentials:'aws_creds'){
                         sh "aws eks update-kubeconfig --name vote-dev"
                         sh 'curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.5/2024-01-04/bin/linux/amd64/kubectl'  
                         sh 'chmod u+x ./kubectl'
-                        sh "./kubectl get deployment result -n vote || ./kubectl apply -f k8s/deployment.yaml -n vote"
-                        sh "./kubectl set image deploy/result result=${registry}/${ms}:${tag} -n vote "
-                        sh "./kubectl rollout restart deploy/result -n vote"
+                        sh "./kubectl get deployment ${env.MS} -n vote || ./kubectl apply -f k8s/deployment.yaml -n vote"
+                        sh "./kubectl set image deploy/${env.MS} ${env.MS}=${registry}/${env.MS}:${env.TAG} -n vote"
+                        sh "./kubectl rollout restart deploy/${env.MS} -n vote"
                     }
                 }
             }
