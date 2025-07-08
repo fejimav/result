@@ -14,7 +14,6 @@ pipeline {
                 script{
                     TAG = getTag()
                     echo "Image tag set to: ${TAG}
-                
                 }
             }
         }
