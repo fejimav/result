@@ -13,7 +13,7 @@ pipeline {
             steps{
                 script{
                     TAG = getTag()
-                    echo "Image tag set to: ${TAG}
+                    echo "Image tag set to: ${TAG}"
                 }
             }
         }
