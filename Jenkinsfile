@@ -1,108 +1,87 @@
-def registry = "817041139384.dkr.ecr.us-east-1.amazonaws.com"
+def registry= "654654385216.dkr.ecr.us-east-1.amazonaws.com"
 def region = "us-east-1"
 
 pipeline {
     agent any
-    options {
-        timeout(time: 30, unit: 'MINUTES')
-    }
+    
     environment {
-        BRANCH_NAME = "${env.BRANCH_NAME}"
+        TAG = ""
+        MS = "result"
     }
-    stages {
-        stage('Initialize') {
-            steps {
-                script {
-                    echo "###### INITIALIZE STAGE - STARTED ######"
-                    echo "Workspace path: ${WORKSPACE}"
-                    
-                    // 1. Verify workspace contents
-                    sh """
-                        echo "### WORKSPACE CONTENTS ###"
-                        ls -al
-                        echo "### PACKAGE.JSON ###"
-                        cat package.json || echo "package.json not found"
-                        echo "#########################"
-                    """
-                    
-                    // 2. Test getMsName() independently
-                    echo "Testing getMsName()..."
-                    try {
-                        env.MS_NAME = getMsName()
-                        echo "MS_NAME successfully set to: ${env.MS_NAME}"
-                    } catch (Exception e) {
-                        echo "CRITICAL: getMsName() failed"
-                        echo "Error details: ${e.toString()}"
-                        echo "JOB_NAME value: ${env.JOB_NAME}"
-                        error("Initialize failed at getMsName()")
-                    }
-                    
-                    // 3. Test getTag() independently
-                    echo "Testing getTag()..."
-                    try {
-                        env.IMAGE_TAG = getTag()
-                        echo "IMAGE_TAG successfully set to: ${env.IMAGE_TAG}"
-                    } catch (Exception e) {
-                        echo "CRITICAL: getTag() failed"
-                        echo "Error details: ${e.toString()}"
-                        echo "package.json content:"
-                        sh "cat package.json || echo 'package.json not accessible'"
-                        error("Initialize failed at getTag()")
-                    }
-                    
-                    echo "###### INITIALIZE STAGE - COMPLETED ######"
+    stages{
+        stage("init"){
+            steps{
+                script{
+                    TAG = getTag()
+                    echo "Image tag set to: ${TAG}
+                
                 }
             }
         }
-        
-        // Rest of your stages remain the same...
+        stage("Build Docker image"){
+            steps{
+                script{
+                    sh "docker build . -t ${registry}/${env.MS}:${env.TAG}"
+                }
+            }
+        }
+
+        stage("Login to Ecr"){
+            steps{
+                script{
+                    withAWS(region:"$region",credentials:'aws_creds'){
+                        sh "aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${registry}"
+                    }
+                }
+            }
+        }
+
+        stage("Docker push"){
+            steps{
+                script{
+                    withAWS(region:"$region",credentials:'aws_creds'){
+                        sh "docker push ${registry}/${env.MS}:${env.TAG}"
+                    }
+                }
+            }
+        }
+
+        stage("Deploy to Dev"){
+            when{branch 'develop'}
+            steps{
+                script{
+                    withAWS(region:"$region",credentials:'aws_creds'){
+                        sh "aws eks update-kubeconfig --name vote-dev"
+                        sh 'curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.5/2024-01-04/bin/linux/amd64/kubectl'  
+                        sh 'chmod u+x ./kubectl'
+                        sh "./kubectl get deployment ${env.MS} -n vote || ./kubectl apply -f k8s/deployment.yaml -n vote"
+                        sh "./kubectl set image deploy/${env.MS} ${env.MS}=${registry}/${env.MS}:${env.TAG} -n vote"
+                        sh "./kubectl rollout restart deploy/${env.MS} -n vote"
+                    }
+                }
+            }
+        }
     }
 }
 
-def getMsName() {
-    echo "DEBUG: Raw JOB_NAME = '${env.JOB_NAME}'"
-    def parts = env.JOB_NAME.split("/")
-    if (parts.size() == 0) {
-        error "JOB_NAME appears empty or invalid"
-    }
-    def name = parts[0].toLowerCase()
-    echo "DEBUG: Derived MS_NAME = '${name}'"
-    return name
+def getMsName(){
+    print env.JOB_NAME
+    return env.JOB_NAME.split("/")[0]
 }
 
-def getTag() {
-    // Verify file exists and is readable
-    if (!fileExists('package.json')) {
-        error "package.json not found in workspace"
-    }
-    
-    // Test JSON parsing
-    def packageJson
-    try {
-        packageJson = readJSON file: 'package.json'
-    } catch (Exception e) {
-        error "Failed to parse package.json: ${e.getMessage()}"
-    }
-    
-    // Verify version field exists
-    if (!packageJson.version) {
-        error "package.json is missing version field"
-    }
-    
-    def version = packageJson.version
-    def tag
-    
-    switch(env.BRANCH_NAME) {
-        case 'main':
-            tag = version
-            break
-        case 'develop':
-            tag = "${version}-develop"
-            break
-        default:
-            tag = "${version}-${env.BRANCH_NAME}"
-    }
-    
-    echo "DEBUG: Version = ${version}, Branch = ${env.BRANCH_NAME}, Final Tag = ${tag}"
-    return tag
+def getTag(){
+ sh "ls -l"
+ version = readJSON file: 'package.json'
+ version = version["version"]
+ print "version: ${version}"
+
+ def tag = ""
+  if (env.BRANCH_NAME == "main"){
+    tag = version
+  } else if(env.BRANCH_NAME == "develop"){
+    tag = "${version}-develop"
+  } else {
+    tag = "${version}-${env.BRANCH_NAME}"
+  }
+return tag 
 }
