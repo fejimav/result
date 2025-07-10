@@ -15,7 +15,7 @@ spec:
         app: result
     spec:
       containers:
-      - image: 817041139384.dkr.ecr.us-east-1.amazonaws.com/result-image
+      - image: 817041139384.dkr.ecr.us-east-1.amazonaws.com/result-image:latest
         name: result
         env:
             - name: POSTGRES_HOST
