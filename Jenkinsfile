@@ -55,7 +55,7 @@ pipeline {
                         sh 'curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.5/2024-01-04/bin/linux/amd64/kubectl'  
                         sh 'chmod u+x ./kubectl'
                         sh "./kubectl get deployment ${env.MS} -n vote || ./kubectl apply -f k8s/deployment.yaml -n vote"
-                        sh "./kubectl set image deploy/${env.MS} ${env.MS}=${registry}/${env.MS}:${env.TAG} -n vote"
+                        sh "./kubectl set image deploy/result result=${registry}/${ms}:${tag} -n vote"
                         sh "./kubectl rollout restart deploy/${env.MS} -n vote"
                     }
                 }
