@@ -6,7 +6,7 @@ pipeline {
     
     environment {
         TAG = ""
-        MS = "result"
+        MS = "result-image"
     }
     stages{
         stage("init"){
